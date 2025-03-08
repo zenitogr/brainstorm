@@ -1,0 +1,4 @@
+pnpm
+rust
+tuari
+nextjs frontend (with compatibility with tauri e.g. no SSR and export)
