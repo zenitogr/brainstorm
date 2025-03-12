@@ -1,0 +1,19 @@
+// Regular Gemini API
+const gemini = new GeminiAPI('your-api-key');
+const response = await gemini.generateText('Hello, how are you?');
+
+// Gemini Streaming
+const geminiStream = new GeminiStreamingAPI('your-api-key');
+for await (const chunk of geminiStream.streamGenerateContent('Tell me a story')) {
+  console.log(chunk);
+}
+
+// Groq API
+const groq = new GroqAPI('your-api-key');
+const response = await groq.generateText('What is quantum computing?');
+
+// Groq Streaming
+const groqStream = new GroqStreamingAPI('your-api-key');
+for await (const chunk of groqStream.streamCompletion('Explain AI')) {
+  console.log(chunk);
+}
