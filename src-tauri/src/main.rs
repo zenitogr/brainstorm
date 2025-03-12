@@ -1,10 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::env;
-use tauri::State;
+use dotenv;
 
 #[tauri::command]
 fn get_api_key(provider: &str) -> Result<String, String> {
+    dotenv::dotenv().ok();
     match provider {
         "gemini" => env::var("GEMINI_API_KEY")
             .map_err(|_| "GEMINI_API_KEY not found".to_string()),
