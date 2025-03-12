@@ -1,101 +1,128 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Message, Provider } from '@/components/Chat/types';
+import { ProviderSelector } from '@/components/Chat/ProviderSelector';
+import { MessageList } from '@/components/Chat/MessageList';
+import { ChatInput } from '@/components/Chat/ChatInput';
+import { GeminiAPI } from '@/lib/api/gemini_request';
+import { GroqAPI } from '@/lib/api/groq';
+import { GeminiStreamingAPI } from '@/lib/api/gemini_streaming';
+import { GroqStreamingAPI } from '@/lib/api/groq_streaming';
+import { getModelsForProvider } from '@/lib/api/providers';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const { theme } = useTheme();
+  const [providers, setProviders] = useState<Provider[]>([
+    { id: 'gemini', name: 'Google Gemini', models: [] },
+    { id: 'groq', name: 'Groq', models: [] }
+  ]);
+  const [selectedProvider, setSelectedProvider] = useState<string>('gemini');
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  useEffect(() => {
+    fetchModels();
+  }, [selectedProvider]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  async function fetchModels() {
+    try {
+      const models = await getModelsForProvider(selectedProvider);
+      setProviders(prevProviders => 
+        prevProviders.map(provider => 
+          provider.id === selectedProvider
+            ? { ...provider, models }
+            : provider
+        )
+      );
+      
+      // Set the first model as default if none is selected
+      if (!selectedModel && models.length > 0) {
+        setSelectedModel(models[0]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch models:', error);
+    }
+  }
+
+  const handleProviderChange = (providerId: string) => {
+    setSelectedProvider(providerId);
+    setSelectedModel(''); // Reset selected model when provider changes
+  };
+
+  const handleSubmit = async () => {
+    if (!input.trim() || !selectedModel) return;
+
+    try {
+      setIsLoading(true);
+      const newMessage: Message = { role: 'user', content: input };
+      setMessages(prev => [...prev, newMessage]);
+      setInput('');
+
+      // Add API call implementation here
+      const response = await sendMessage(input);
+      
+      const assistantMessage: Message = { role: 'assistant', content: response };
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFileSelect = (file: File) => {
+    // Implementation of file handling
+  };
+
+  // Helper function to send messages based on selected provider
+  async function sendMessage(content: string): Promise<string> {
+    switch (selectedProvider) {
+      case 'gemini':
+        const gemini = isStreaming 
+          ? new GeminiStreamingAPI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || '')
+          : new GeminiAPI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || '');
+        // Add implementation
+        return 'Gemini response';
+        
+      case 'groq':
+        const groq = isStreaming
+          ? new GroqStreamingAPI(process.env.NEXT_PUBLIC_GROQ_API_KEY || '')
+          : new GroqAPI(process.env.NEXT_PUBLIC_GROQ_API_KEY || '');
+        // Add implementation
+        return 'Groq response';
+
+      default:
+        throw new Error('Unsupported provider');
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-screen p-4 gap-4">
+      <ProviderSelector
+        providers={providers}
+        selectedProvider={selectedProvider}
+        selectedModel={selectedModel}
+        onProviderChange={handleProviderChange}
+        onModelChange={setSelectedModel}
+      />
+      <MessageList ref={chatEndRef} messages={messages} />
+      <ChatInput
+        input={input}
+        onInputChange={setInput}
+        onSubmit={handleSubmit}
+        isLoading={isLoading}
+        onFileSelect={handleFileSelect}
+      />
     </div>
   );
 }
